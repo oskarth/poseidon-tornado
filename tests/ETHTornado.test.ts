@@ -11,6 +11,8 @@ import { MerkleTree, Hasher } from "../src/merkleTree";
 import { groth16 } from "snarkjs";
 import path from "path";
 
+import bigInt from "big-integer";
+
 const ETH_AMOUNT = ethers.utils.parseEther("1");
 const HEIGHT = 20;
 
@@ -46,6 +48,8 @@ class Deposit {
         this.poseidon = poseidon;
     }
     static new(poseidon: any) {
+        // Set nullifier to zero for easier debugging
+        //const nullifier = new Uint8Array(15);
         const nullifier = ethers.utils.randomBytes(15);
         return new this(nullifier, poseidon);
     }
@@ -87,6 +91,22 @@ async function prove(witness: any): Promise<Proof> {
         c: [proof.pi_c[0], proof.pi_c[1]],
     };
     return solProof;
+}
+
+function stringifyBigInts(o: any): any {
+  if (typeof o == "bigint" || o instanceof bigInt) {
+      return o.toString();
+  } else if (Array.isArray(o)) {
+    return o.map(stringifyBigInts);
+  } else if (typeof o == "object") {
+    let res: any = {};
+    for (let k in o) {
+      res[k] = stringifyBigInts(o[k]);
+    }
+    return res;
+  } else {
+    return o;
+  }
 }
 
 describe("ETHTornado", function () {
@@ -153,18 +173,24 @@ describe("ETHTornado", function () {
             deposit.leafIndex
         );
 
+        // TODO: Make this part of PR?
         const witness = {
             // Public
-            root,
-            nullifierHash,
-            recipient,
+            root: BigNumber.from(root).toBigInt(),
+            nullifierHash: BigNumber.from(nullifierHash).toBigInt(),
+            // XXX - hex address?
+            recipient: BigNumber.from(recipient).toBigInt(),
             relayer,
             fee,
             // Private
             nullifier: BigNumber.from(deposit.nullifier).toBigInt(),
-            pathElements: path_elements,
+            pathElements: path_elements.map((x) => BigNumber.from(x).toBigInt()),
             pathIndices: path_index,
         };
+
+        let witness_str = JSON.stringify(stringifyBigInts(witness), null, 2);
+
+        console.log("Witness string\n\n", witness_str);
 
         const solProof = await prove(witness);
 
